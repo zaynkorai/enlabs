@@ -1,0 +1,225 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API for processing incoming requests from 3rd-party providers and managing user balances.",
+        "title": "Enlabs Balance Processing API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8089",
+    "paths": {
+        "/": {
+            "get": {
+                "description": "Get the current status of the API",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Default"
+                ],
+                "summary": "Get API status",
+                "operationId": "get-api-status",
+                "responses": {
+                    "200": {
+                        "description": "Successful response with API status",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Get the health status of the application",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Default"
+                ],
+                "summary": "Get health status",
+                "operationId": "get-health-status",
+                "responses": {
+                    "200": {
+                        "description": "Successful response with health status code and message",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/{userId}/balance": {
+            "get": {
+                "description": "Retrieves the current balance for a specified user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Gets current user balance",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Current user balance",
+                        "schema": {
+                            "$ref": "#/definitions/http.BalanceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request: Invalid userId",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: User does not exist",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/user/{userId}/transaction": {
+            "post": {
+                "description": "Processes 'win' or 'lose' transactions and updates the user's balance, ensuring idempotency and non-negative balance.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Updates user balance based on a transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "game",
+                            "server",
+                            "payment"
+                        ],
+                        "type": "string",
+                        "description": "Type of the transaction source (game, server, payment)",
+                        "name": "Source-Type",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Transaction details",
+                        "name": "transaction",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.TransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Transaction processed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request: Invalid input or insufficient balance",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: User does not exist",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict: Transaction with this ID already processed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "http.BalanceResponse": {
+            "description": "Current user balance information.",
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "http.TransactionRequest": {
+            "description": "Details for a new transaction to update user balance.",
+            "type": "object",
+            "required": [
+                "amount",
+                "state",
+                "transactionId"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string",
+                    "enum": [
+                        "win",
+                        "lose"
+                    ]
+                },
+                "transactionId": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

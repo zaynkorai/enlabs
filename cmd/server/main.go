@@ -11,6 +11,11 @@ import (
 	"github.com/zaynkorai/enlabs/pkg/database"
 )
 
+// @title Enlabs Balance Processing API
+// @version 1.0
+// @description API for processing incoming requests from 3rd-party providers and managing user balances.
+// @host localhost:8089
+
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {

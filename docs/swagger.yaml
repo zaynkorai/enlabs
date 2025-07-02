@@ -1,0 +1,156 @@
+definitions:
+  http.BalanceResponse:
+    description: Current user balance information.
+    properties:
+      balance:
+        type: string
+      userId:
+        type: integer
+    type: object
+  http.TransactionRequest:
+    description: Details for a new transaction to update user balance.
+    properties:
+      amount:
+        type: string
+      state:
+        enum:
+        - win
+        - lose
+        type: string
+      transactionId:
+        type: string
+    required:
+    - amount
+    - state
+    - transactionId
+    type: object
+host: localhost:8089
+info:
+  contact: {}
+  description: API for processing incoming requests from 3rd-party providers and managing
+    user balances.
+  title: Enlabs Balance Processing API
+  version: "1.0"
+paths:
+  /:
+    get:
+      description: Get the current status of the API
+      operationId: get-api-status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful response with API status
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API status
+      tags:
+      - Default
+  /health:
+    get:
+      description: Get the health status of the application
+      operationId: get-health-status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful response with health status code and message
+          schema:
+            type: object
+      summary: Get health status
+      tags:
+      - Default
+  /user/{userId}/balance:
+    get:
+      description: Retrieves the current balance for a specified user.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Current user balance
+          schema:
+            $ref: '#/definitions/http.BalanceResponse'
+        "400":
+          description: 'Bad Request: Invalid userId'
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 'Not Found: User does not exist'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Gets current user balance
+      tags:
+      - Users
+  /user/{userId}/transaction:
+    post:
+      consumes:
+      - application/json
+      description: Processes 'win' or 'lose' transactions and updates the user's balance,
+        ensuring idempotency and non-negative balance.
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: Type of the transaction source (game, server, payment)
+        enum:
+        - game
+        - server
+        - payment
+        in: header
+        name: Source-Type
+        required: true
+        type: string
+      - description: Transaction details
+        in: body
+        name: transaction
+        required: true
+        schema:
+          $ref: '#/definitions/http.TransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Transaction processed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'Bad Request: Invalid input or insufficient balance'
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 'Not Found: User does not exist'
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: 'Conflict: Transaction with this ID already processed'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Updates user balance based on a transaction
+      tags:
+      - Users
+swagger: "2.0"
