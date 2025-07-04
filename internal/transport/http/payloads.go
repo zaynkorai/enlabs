@@ -4,7 +4,7 @@ package http
 // @Description Details for a new transaction to update user balance.
 type TransactionRequest struct {
 	State         string `json:"state" binding:"required,oneof=win lose"`
-	Amount        string `json:"amount" binding:"required"`
+	Amount        string `json:"amount" binding:"required,decimal_2_places"`
 	TransactionID string `json:"transactionId" binding:"required"`
 }
 

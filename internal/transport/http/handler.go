@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -20,10 +21,35 @@ type Handler struct {
 }
 
 func NewHandler(transactionService *services.TransactionService) *Handler {
+	v := validator.New()
+
+	if err := v.RegisterValidation("decimal_2_places", validateDecimalTwoPlaces); err != nil {
+		log.Fatalf("Failed to register custom validator: %v", err)
+	}
+
 	return &Handler{
 		transactionService: transactionService,
-		validator:          validator.New(),
+		validator:          v,
 	}
+}
+
+func validateDecimalTwoPlaces(fl validator.FieldLevel) bool {
+	amountStr := fl.Field().String()
+	parts := strings.Split(amountStr, ".")
+
+	if len(parts) > 2 { // More than one decimal point
+		return false
+	}
+
+	if len(parts) == 2 { // Has a decimal part
+		decimalPart := parts[1]
+		if len(decimalPart) > 2 {
+			return false // More than 2 decimal places
+		}
+	}
+
+	_, err := decimal.NewFromString(amountStr)
+	return err == nil
 }
 
 // ProcessTransaction
@@ -66,8 +92,21 @@ func (h *Handler) ProcessTransaction(c *gin.Context) {
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+
+		log.Printf("Validation error: %v", err)
+
+		if _, ok := err.(*validator.InvalidValidationError); ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal validation error"})
+			return
+		}
+		for _, err := range err.(validator.ValidationErrors) {
+			if err.Field() == "Amount" && err.Tag() == "decimal_2_places" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Amount must be a valid number string with up to 2 decimal places."})
+				return
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed for field '" + err.Field() + "': " + err.Tag()})
+			return
+		}
 	}
 
 	amount, err := utils.ParseDecimal(req.Amount)
@@ -79,6 +118,10 @@ func (h *Handler) ProcessTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Amount must be positive."})
 		return
 	}
+
+	// Ensure amount is rounded to 2 decimal places before passing to service
+	// This adds an extra layer of safety, although `validateDecimalTwoPlaces` should prevent >2 places.
+	amount = amount.RoundBank(2)
 
 	newTransaction := &transaction.Transaction{
 		UserID:        userID,
