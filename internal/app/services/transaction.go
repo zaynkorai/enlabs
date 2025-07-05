@@ -24,16 +24,6 @@ func NewTransactionService(userRepo user.Repository, transactionRepo transaction
 }
 
 func (s *TransactionService) ProcessTransaction(userID uint64, reqTransaction *transaction.Transaction) error {
-
-	_, err := s.transactionRepo.GetByTransactionID(reqTransaction.TransactionID) // Check for duplicate transactionId (Idempotency)
-
-	if err == nil {
-		return appErrors.NewConflictError("transaction with this ID has already been processed")
-	}
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to check for existing transaction: %w", err)
-	}
-
 	user, err := s.userRepo.GetByID(userID)
 	if err == sql.ErrNoRows {
 		return appErrors.NewNotFoundError(fmt.Sprintf("user with ID %d not found", userID))
@@ -47,6 +37,8 @@ func (s *TransactionService) ProcessTransaction(userID uint64, reqTransaction *t
 	case "win":
 		newBalance = user.Balance.Add(reqTransaction.Amount)
 	case "lose":
+		// Pre-check if balance would go negative.
+		// This client-side check prevents unnecessary database transactions for invalid requests.
 		if user.Balance.LessThan(reqTransaction.Amount) {
 			return appErrors.NewValidationError("insufficient balance")
 		}
@@ -57,16 +49,20 @@ func (s *TransactionService) ProcessTransaction(userID uint64, reqTransaction *t
 
 	err = s.userRepo.AtomicUpdateBalanceAndCreateTransaction(user.ID, newBalance, reqTransaction)
 	if err != nil {
-		log.Printf("Error in AtomicUpdateBalanceAndCreateTransaction: %v", err)
-		if appErrors.IsConflictError(err) {
+		if appErrors.IsAlreadyProcessedError(err) {
+
+			log.Printf("Transaction ID %s for user %d already processed. Skipping balance update.", reqTransaction.TransactionID, userID)
+			return nil // Return nil to indicate success to the caller (HTTP handler)
+		}
+		if appErrors.IsNotFoundError(err) {
+
 			return err
 		}
-		if appErrors.IsValidationError(err) {
-			return err
-		}
-		return fmt.Errorf("failed to update user balance and record transaction: %w", err)
+
+		return fmt.Errorf("failed to update user balance and record transaction atomically: %w", err)
 	}
 
+	log.Printf("User %d balance updated to %s for transaction %s", userID, newBalance.StringFixed(2), reqTransaction.TransactionID)
 	return nil
 }
 

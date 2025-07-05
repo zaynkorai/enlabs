@@ -35,8 +35,23 @@ func (r *UserRepository) GetByID(id uint64) (*user.User, error) {
 
 // AtomicUpdateBalanceAndCreateTransaction performs both operations in a single database transaction
 // to ensure atomicity and consistency.
+// It gracefully handles duplicate transaction IDs by returning a specific error
+// that can be interpreted as "already processed".
 func (r *UserRepository) AtomicUpdateBalanceAndCreateTransaction(userID uint64, newBalance decimal.Decimal, newTransaction *transaction.Transaction) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+
+		newTransaction.UserID = userID
+		if createErr := tx.Create(newTransaction).Error; createErr != nil {
+			var pgErr *pgconn.PgError
+			// Check if the error is a PostgreSQL unique constraint violation (code 23505)
+			if errors.As(createErr, &pgErr) && pgErr.Code == "23505" {
+
+				return appErrors.NewAlreadyProcessedError("transaction with this ID has already been processed")
+			}
+
+			return fmt.Errorf("failed to create transaction record: %w", createErr)
+		}
+
 		result := tx.Model(&user.User{}).
 			Where("id = ?", userID).
 			Updates(map[string]interface{}{"balance": newBalance, "updated_at": gorm.Expr("NOW()")})
@@ -45,16 +60,7 @@ func (r *UserRepository) AtomicUpdateBalanceAndCreateTransaction(userID uint64, 
 			return fmt.Errorf("failed to update user balance: %w", result.Error)
 		}
 		if result.RowsAffected == 0 {
-			return appErrors.NewNotFoundError(fmt.Sprintf("user with ID %d not found during balance update", userID))
-		}
-
-		newTransaction.UserID = userID
-		if createErr := tx.Create(newTransaction).Error; createErr != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(createErr, &pgErr) && pgErr.Code == "23505" { // 23505 is unique_violation
-				return appErrors.NewConflictError("transaction with this ID has already been processed (duplicate key)")
-			}
-			return fmt.Errorf("failed to create transaction record: %w", createErr)
+			return fmt.Errorf("user with ID %d not found or not updated after transaction creation", userID)
 		}
 
 		return nil

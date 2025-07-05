@@ -4,7 +4,7 @@ import "errors"
 
 type AppError struct {
 	Message string
-	Code    string // e.g., "NOT_FOUND", "VALIDATION_ERROR", "CONFLICT"
+	Code    string // e.g., "NOT_FOUND", "VALIDATION_ERROR", "CONFLICT", "ALREADY_PROCESSED"
 }
 
 func (e *AppError) Error() string {
@@ -45,4 +45,16 @@ func NewConflictError(message string) error {
 func IsConflictError(err error) bool {
 	var appErr *AppError
 	return errors.As(err, &appErr) && appErr.Code == "CONFLICT"
+}
+
+func NewAlreadyProcessedError(message string) error {
+	return &AppError{
+		Message: message,
+		Code:    "ALREADY_PROCESSED",
+	}
+}
+
+func IsAlreadyProcessedError(err error) bool {
+	var appErr *AppError
+	return errors.As(err, &appErr) && appErr.Code == "ALREADY_PROCESSED"
 }

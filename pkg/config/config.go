@@ -15,6 +15,8 @@ type Config struct {
 	DBPassword string `mapstructure:"DB_PASSWORD"`
 	DBName     string `mapstructure:"DB_NAME"`
 	AppPort    string `mapstructure:"APP_PORT"`
+	TimeZone   string `mapstructure:"TIME_ZONE"`
+	SSLMode    string `mapstructure:"SSL_MODE"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -57,6 +59,18 @@ func LoadConfig() (*Config, error) {
 		cfg.DBName = os.Getenv("DB_NAME")
 		if cfg.DBName == "" {
 			return nil, fmt.Errorf("DB_NAME environment variable not set")
+		}
+	}
+	if cfg.SSLMode == "" {
+		cfg.SSLMode = os.Getenv("SSL_MODE")
+		if cfg.SSLMode == "" {
+			cfg.SSLMode = "disable"
+		}
+	}
+	if cfg.TimeZone == "" {
+		cfg.TimeZone = os.Getenv("TIME_ZONE")
+		if cfg.TimeZone == "" {
+			return nil, fmt.Errorf("TIME_ZONE environment variable not set")
 		}
 	}
 
